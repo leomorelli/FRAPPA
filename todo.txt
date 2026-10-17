@@ -1,0 +1,65 @@
+1. Develop preprocessing and image-quality control
+   Decide which corrections are necessary for the actual images.
+   - Check saturation, signal-to-background ratio, focus changes, motion, and acquisition fading.
+   - Apply dark-current and flat-field correction if suitable calibration images exist.
+   - Correct stage drift when needed and inspect the estimated transformations.
+   - Exclude image borders that become invalid after registration.
+   - Create smoothed images for segmentation while preserving suitable measurement images for intensity extraction.
+   Output: corrected images, coordinate transformations, valid-pixel masks, and quality flags.
+   Preprocessing should avoid operations such as per-frame brightness equalization that could alter the recovery signal.
+2. Develop and benchmark individual-cell segmentation
+   This stage identifies all cells, independently of whether they were bleached.
+   - Detect foreground in the prebleach frame.
+   - Separate touching objects using watershed or another suitable method.
+   - Remove artifacts and apply the agreed rules for small or border-touching objects.
+   - Give each cell a unique, persistent identifier.
+   - Compare predictions with manual annotations using object matching, precision, recall, overlap, and split/merge errors.
+   - Tune segmentation parameters on the development images, then evaluate on held-out images.
+   Output: a cell-label image, an object table, and a segmentation benchmark.
+3. Identify bleached cells and define measurement regions
+   These are related but distinct tasks.
+   - Compare aligned prebleach and postbleach images to locate fluorescence loss.
+   - Prefer recorded microscope bleach coordinates when available.
+   - Assign each bleach region to its corresponding cell.
+   - Classify cells as bleached or unbleached.
+   - Define the bleach ROI, background ROI, and appropriate reference region or whole-compartment measurement.
+   - Validate both the selected cell identities and the bleach-region geometry.
+   Output: bleached-cell IDs and reviewed measurement masks.
+   Selecting a whole bleached cell does not mean recovery should be measured over that entire cell. For local bleaching, the recovery signal usually comes from the bleach ROI; the cell mask provides identity and context.
+4. Extract and correct fluorescence traces
+   Turn the images and masks into numerical measurements.
+   - Follow the same physical bleach region throughout the sequence; handle motion explicitly.
+   - Measure bleach-ROI, background, and reference/compartment intensities at every time point.
+   - Save the measured traces before normalization.
+   - Subtract background.
+   - Apply a normalization appropriate to acquisition fading, bleach-induced fluorescence loss, and the experimental geometry.
+   - Inspect individual curves for artifacts.
+   Established FRAP protocols distinguish these measurements and corrections before estimating recovery parameters. Wiley Online Library
+   Output: a time-series table for every bleach ROI, with raw and corrected traces.
+5. Fit recovery curves and estimate uncertainty
+   Begin with a model appropriate to the information in the experiment.
+   - Set time zero to the first postbleach observation.
+   - Fit a descriptive recovery model, such as a single exponential.
+   - Estimate recovery half-time and, when supported, the asymptotic recovery/mobile fraction.
+   - Inspect residuals, parameter uncertainty, and whether the recording resolves the plateau.
+   - Assess sensitivity to ROI geometry and normalization.
+   - Introduce mechanistic diffusion or binding models only when their assumptions and required measurements are satisfied.
+   Output: fitted parameters, uncertainties, diagnostic plots, and fit-quality flags.
+   FRAP can reflect different transport and reaction processes, so a descriptive exponential fit alone does not establish a diffusion coefficient or binding rate. Wiley Online Library
+6. Validate the complete pipeline and compare conditions
+   Check whether errors in earlier stages affect the final biological conclusions.
+   - Compare automated results with manually reviewed measurements.
+   - Test synthetic images with known bleaching and recovery parameters.
+   - Check robustness to noise, drift, parameter changes, and different experiments.
+   - Establish exclusion rules before comparing biological conditions.
+   - Preserve the experimental hierarchy: multiple cells from one experiment are not automatically independent biological replicates.
+   - Report exclusions, uncertainty, and performance on held-out data.
+   Output: a validation report and a justified statistical analysis.
+7. Turn the validated workflow into a Python package
+   Package each stage as it becomes stable.
+- Separate loading, preprocessing, segmentation, bleach detection, measurement, fitting, and visualization into functions or modules.
+- Keep parameters in a configuration object or file.
+- Save input identities, parameters, software versions, masks, and quality flags with each run.
+- Add tests for known-truth examples, invalid inputs, and important failure cases.
+- Provide batch processing, installation instructions, and a small reproducible example.
+- Version the code and analysis settings.
