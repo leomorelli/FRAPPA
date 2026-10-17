@@ -1,0 +1,9 @@
+# Exact direct dependency versions used for validation; Python 3.12.14
+numpy==2.3.5
+scipy==1.17.0
+scikit-image==0.26.0
+tifffile==2026.10.15
+pandas==2.2.3
+matplotlib==3.10.8
+pytest==9.1.1
+seaborn==0.13.2
