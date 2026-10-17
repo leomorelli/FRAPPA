@@ -1,11 +1,9 @@
 1. Develop preprocessing and image-quality control
    Decide which corrections are necessary for the actual images.
-   - Check saturation, signal-to-background ratio, focus changes, motion, and acquisition fading.
-   - Apply dark-current and flat-field correction if suitable calibration images exist.
-   - Correct stage drift when needed and inspect the estimated transformations.
+   - Check saturation, signal-to-background ratio, focus changes, and acquisition fading.
    - Exclude image borders that become invalid after registration.
    - Create smoothed images for segmentation while preserving suitable measurement images for intensity extraction.
-   Output: corrected images, coordinate transformations, valid-pixel masks, and quality flags.
+   Output: corrected images, valid-pixel masks, and quality flags.
    Preprocessing should avoid operations such as per-frame brightness equalization that could alter the recovery signal.
 2. Develop and benchmark individual-cell segmentation
    This stage identifies all cells, independently of whether they were bleached.
