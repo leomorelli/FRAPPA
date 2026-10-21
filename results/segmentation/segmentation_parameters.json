@@ -1,0 +1,7 @@
+{
+  "sigma": 0.5,
+  "kernel_size": 64,
+  "clip_limit": 0.01,
+  "min_droplet_area": 150,
+  "min_peak_distance": 6
+}
