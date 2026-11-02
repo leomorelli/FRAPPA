@@ -1,6 +1,14 @@
 import argparse
 from pathlib import Path
 
+import numpy as np
+import tifffile
+
+from . import droplet_segmentation
+
+
+FRAME_PRE = 0 
+
 
 def main():
     parser = argparse.ArgumentParser(prog="frappa", description=__doc__)
@@ -15,11 +23,18 @@ def main():
     files = sorted(files)
 
     print(f"{len(files)} TIFF file(s) in {args.input}:")
-    for f in files:
-        print("  ", f.name)
 
-    args.output.mkdir(parents=True, exist_ok=True)
-    print(f"Results will be written to {args.output}")
+    seg_dir = args.output / "segmentation"
+    seg_dir.mkdir(parents=True, exist_ok=True)
+
+    for f in files:
+        stack = tifffile.imread(f)                              # (frames, rows, columns)
+        pre = stack[FRAME_PRE].astype(np.float64)
+        labels = droplet_segmentation.segment(pre)
+        tifffile.imwrite(seg_dir / f"{f.stem}_droplet_labels.tif", labels.astype(np.uint16))
+        print(f"  {f.stem}: {labels.max()} droplets")
+
+    print(f"Done. Results in {args.output}")
 
 
 if __name__ == "__main__":
