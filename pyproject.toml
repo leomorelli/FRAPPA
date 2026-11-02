@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "frappa"
+version = "0.1.0"
+description = "FRAP analysis of bleached droplets: from image stacks to normalized recovery curves"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=2",
+    "scipy",
+    "pandas",
+    "matplotlib",
+    "tifffile",
+    "scikit-image>=0.26",
+]
+
+[project.scripts]
+frappa = "frappa.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
