@@ -31,6 +31,12 @@ def build_parser():
 
     bl = parser.add_argument_group("bleach detection parameters")
     bl.add_argument("--bl-sigma", type=float, default=1.0, help="smoothing of the pre/post frames, in pixels (default: %(default)s)")
+    bl.add_argument("--territory", type=int, default=5,
+                    help="width of the ring around each droplet checked for gained signal, in pixels (default: %(default)s)")
+    bl.add_argument("--gain-frac", type=float, default=0.25,
+                    help="a ring pixel counts as gained if it brightened by more than this fraction of the droplet intensity (default: %(default)s)")
+    bl.add_argument("--max-shift", type=float, default=1.0,
+                    help="droplets with a larger estimated shift, in pixels, count as moved and are excluded (default: %(default)s)")
     bl.add_argument("--min-peak-drop", type=float, default=0.4,
                     help="a droplet is bleached if its peak relative drop is at least this (default: %(default)s)")
     bl.add_argument("--spot-fraction", type=float, default=0.75,
@@ -43,7 +49,8 @@ def main():
     args = build_parser().parse_args()
     seg_params = {"sigma": args.sigma, "kernel_size": args.kernel_size, "clip_limit": args.clip_limit,
                   "min_droplet_area": args.min_droplet_area, "min_peak_distance": args.min_peak_distance}
-    bleach_params = {"bl_sigma": args.bl_sigma, "min_peak_drop": args.min_peak_drop, "spot_fraction": args.spot_fraction}
+    bleach_params = {"bl_sigma": args.bl_sigma, "territory": args.territory, "gain_frac": args.gain_frac, "max_shift": args.max_shift,
+                     "min_peak_drop": args.min_peak_drop, "spot_fraction": args.spot_fraction}
 
     files = sorted(p for p in args.input.iterdir() if p.suffix.lower() in (".tif", ".tiff"))
     print(f"{len(files)} TIFF file(s) in {args.input}")
@@ -65,7 +72,7 @@ def main():
 
     print("Segmentation of the pre-bleach frame: " + ", ".join(f"{k}={v}" for k, v in seg_params.items()))
     print("Bleach detection: " + ", ".join(f"{k}={v}" for k, v in bleach_params.items()))
-    
+
     for f in files:
         name = f.stem
         stack = tifffile.imread(f).astype(np.float64)              # (frames, rows, columns)
@@ -81,7 +88,7 @@ def main():
         tab.to_csv(bleach_dir / f"{name}_all_droplets.csv", index=False)
         spot_tab.to_csv(bleach_dir / f"{name}_bleached_droplets.csv", index=False)
 
-        print(f"  {name}: {labels.max()} droplets, {int(tab['bleached'].sum())} bleached")
+        print(f"  {name}: {labels.max()} droplets, {int(tab['moved'].sum())} moved (excluded), {int(tab['bleached'].sum())} bleached")
 
     print(f"Done. Results in {args.output}")
 
