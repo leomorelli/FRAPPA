@@ -6,6 +6,7 @@
 - bleached spot: pixels whose drop is at least spot_fraction x the droplet's peak drop
 """
 
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from scipy import ndimage as ndi
@@ -97,3 +98,35 @@ def detect(pre, post, labels, p):
                      "spot_offset": np.hypot(sy - cy, sx - cx) / np.sqrt(droplet.sum() / np.pi),
                      "spot_touches_edge": bool((spot & edge).any())})
     return tab, spots, pd.DataFrame(rows)
+
+
+def overview_figure(name, pre, post, labels, spots, tab):
+    """Pre-bleach and first post-bleach frames; on the post-bleach frame: all droplets (green),
+    bleached spots (magenta) with the droplet IDs, moved droplets (orange)."""
+    lo, hi = np.percentile(pre, (1, 99.5))                  # same contrast for both frames
+    moved = np.isin(labels, tab.loc[tab["moved"], "droplet"])
+    bleached_ids = tab.loc[tab["bleached"], "droplet"]
+
+    fig, axes = plt.subplots(1, 3, figsize=(18, 6))
+    axes[0].imshow(pre, cmap="gray", vmin=lo, vmax=hi)
+    axes[0].set_title("pre-bleach")
+    axes[1].imshow(post, cmap="gray", vmin=lo, vmax=hi)
+    axes[1].set_title("first post-bleach")
+    axes[2].imshow(post, cmap="gray", vmin=lo, vmax=hi)
+    for d in np.unique(labels)[1:]:
+        axes[2].contour(labels == d, levels=[0.5], colors="lime", linewidths=0.4)
+    if moved.any():
+        axes[2].contour(moved, levels=[0.5], colors="orange", linewidths=1.0)
+    if spots.any():
+        axes[2].contour(spots > 0, levels=[0.5], colors="magenta", linewidths=0.8)
+    for d in bleached_ids:                                  # ID above each bleached droplet
+        droplet = labels == d
+        cy, cx = ndi.center_of_mass(droplet)
+        radius = np.sqrt(droplet.sum() / np.pi)
+        axes[2].text(cx, cy - radius - 3, str(d), color="yellow", fontsize=8, ha="center")
+    axes[2].set_title(f"{len(bleached_ids)} bleached (magenta), {int(tab['moved'].sum())} moved (orange)")
+    for ax in axes:
+        ax.axis("off")
+    fig.suptitle(name, fontsize=13)
+    fig.tight_layout()
+    return fig

@@ -12,6 +12,7 @@ import tifffile
 
 from . import __version__
 from . import bleach_detection, droplet_segmentation, recovery_curves
+from .common import save_figure
 
 
 FRAME_PRE = 0 
@@ -90,16 +91,24 @@ def main():
         tifffile.imwrite(bleach_dir / f"{name}_spot_labels.tif", spots.astype(np.uint16))
         tab.to_csv(bleach_dir / f"{name}_all_droplets.csv", index=False)
         spot_tab.to_csv(bleach_dir / f"{name}_bleached_droplets.csv", index=False)
+        save_figure(bleach_detection.overview_figure(name, pre, post, labels, spots, tab),
+                    bleach_dir / "figures", f"{name}_bleach_overview")
 
         # 3. recovery curves of the bleached droplets
         curves = recovery_curves.measure(stack, labels, spots, tab, FRAME_PRE)
         curves.insert(0, "file", name)
         curves.to_csv(curves_dir / f"{name}_recovery_curves.csv", index=False)
+        if not curves.empty:
+            save_figure(recovery_curves.curves_figure(curves), curves_dir / "figures", f"{name}_recovery_curves")
         all_curves.append(curves)
 
         print(f"  {name}: {labels.max()} droplets, {int(tab['moved'].sum())} moved (excluded), {int(tab['bleached'].sum())} bleached")
-        
-    pd.concat(all_curves, ignore_index=True).to_csv(curves_dir / "recovery_curves.csv", index=False)
+
+    all_curves = pd.concat(all_curves, ignore_index=True)
+    all_curves.to_csv(curves_dir / "recovery_curves.csv", index=False)
+    if not all_curves.empty:
+        save_figure(recovery_curves.all_files_curves_figure(all_curves), curves_dir / "figures", "mean_final_curves")
+
     print(f"Done. Results in {args.output}")
 
 

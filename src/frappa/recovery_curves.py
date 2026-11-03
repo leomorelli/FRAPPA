@@ -8,8 +8,10 @@ spot = bleached region, tot = whole bleached droplet, ref = reference droplets (
 bleached; all their pixels pooled). All are mean intensities per frame. No background subtraction.
 """
 
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from matplotlib.ticker import MultipleLocator
 
 
 def measure(stack, labels, spots, tab, frame_pre):
@@ -32,3 +34,44 @@ def measure(stack, labels, spots, tab, frame_pre):
         rows.append(pd.DataFrame({"droplet": d, "frame": frames, "spot": spot, "tot": tot, "ref": ref,
                                   "A": A, "B": B, "C": C, "D": D, "final": B / D}))
     return pd.concat(rows, ignore_index=True) if rows else pd.DataFrame()
+
+
+def curves_figure(df):
+    """Recovery curves of one file: each droplet in colour (ID in the legend), mean ± SD in black."""
+    fig, ax = plt.subplots(figsize=(6, 4.5))
+    for d, dd in df.groupby("droplet"):
+        ax.plot(dd["frame"], dd["final"], lw=0.8, label=d)
+    mean = df.groupby("frame")["final"].mean()
+    sd = df.groupby("frame")["final"].std()
+    ax.plot(mean.index, mean, "k-o", markersize=3)
+    ax.fill_between(mean.index, mean - sd, mean + sd, color="k", alpha=0.1)
+    ax.axhline(1, color="gray", ls=":", lw=0.8)
+    ax.set_title(f"{df['file'].iloc[0]} (n = {df['droplet'].nunique()})", fontsize=10)
+    ax.set_xlabel("frame")
+    ax.set_ylabel("final (normalized intensity)")
+    ax.xaxis.set_major_locator(MultipleLocator(5))
+    ax.legend(title="droplet", fontsize=7, title_fontsize=8, ncol=2)
+    fig.tight_layout()
+    return fig
+
+
+def all_files_curves_figure(curves):
+    """Recovery curves of all files, one panel per file: droplets in light gray, mean ± SD in
+    black. Panels share the y-axis, so the files can be compared."""
+    names = curves["file"].unique()
+    fig, axes = plt.subplots(1, len(names), squeeze=False, sharey=True, figsize=(5 * len(names), 4))
+    for ax, name in zip(axes[0], names):
+        df = curves[curves["file"] == name]
+        for _, dd in df.groupby("droplet"):
+            ax.plot(dd["frame"], dd["final"], color="0.8", lw=0.6)
+        mean = df.groupby("frame")["final"].mean()
+        sd = df.groupby("frame")["final"].std()
+        ax.plot(mean.index, mean, "k-o", markersize=3)
+        ax.fill_between(mean.index, mean - sd, mean + sd, color="k", alpha=0.1)
+        ax.axhline(1, color="gray", ls=":", lw=0.8)
+        ax.set_title(f"{name} (n = {df['droplet'].nunique()})", fontsize=10)
+        ax.set_xlabel("frame")
+        ax.xaxis.set_major_locator(MultipleLocator(5))
+    axes[0, 0].set_ylabel("final (normalized intensity)")
+    fig.tight_layout()
+    return fig
