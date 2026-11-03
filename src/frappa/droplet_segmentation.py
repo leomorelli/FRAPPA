@@ -9,12 +9,6 @@ from scipy import ndimage as ndi
 from skimage import exposure, filters, measure, morphology, segmentation
 from skimage.feature import peak_local_max
 
-SIGMA = 0.5
-KERNEL_SIZE = 64
-CLIP_LIMIT = 0.01
-MIN_DROPLET_AREA = 150
-MIN_PEAK_DISTANCE = 6
-
 
 def normalize(img, pct=(2, 98)):
     """Percentile normalization to [0, 1] (needed by CLAHE)."""
@@ -49,10 +43,12 @@ def split_touching(clean_mask, min_peak_distance, min_droplet_area):
     return labels
 
 
-def segment(frame):
-    """Droplet label image of one pre-bleach frame (one integer ID per droplet, 0 = background)."""
-    mask = create_mask(normalize(frame), SIGMA, KERNEL_SIZE, CLIP_LIMIT)
-    labels = split_touching(remove_small(mask, MIN_DROPLET_AREA), MIN_PEAK_DISTANCE, MIN_DROPLET_AREA)
+def segment(frame, p):
+    """Droplet label image of one pre-bleach frame (one integer ID per droplet, 0 = background).
+    p: dict with sigma, kernel_size, clip_limit, min_droplet_area, min_peak_distance."""
+    mask = create_mask(normalize(frame), p["sigma"], p["kernel_size"], p["clip_limit"])
+    clean = remove_small(mask, p["min_droplet_area"])
+    labels = split_touching(clean, p["min_peak_distance"], p["min_droplet_area"])
     labels = segmentation.clear_border(labels)              # drop droplets touching the border
     labels, _, _ = segmentation.relabel_sequential(labels)
     return labels
