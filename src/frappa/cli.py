@@ -7,10 +7,11 @@ from datetime import datetime
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 import tifffile
 
 from . import __version__
-from . import bleach_detection, droplet_segmentation
+from . import bleach_detection, droplet_segmentation, recovery_curves
 
 
 FRAME_PRE = 0 
@@ -67,12 +68,14 @@ def main():
 
     seg_dir = args.output / "segmentation"
     bleach_dir = args.output / "bleach_detection"
-    seg_dir.mkdir(exist_ok=True)
-    bleach_dir.mkdir(exist_ok=True)
+    curves_dir = args.output / "recovery_curves"
+    for folder in (seg_dir, bleach_dir, curves_dir):
+        folder.mkdir(exist_ok=True)
 
     print("Segmentation of the pre-bleach frame: " + ", ".join(f"{k}={v}" for k, v in seg_params.items()))
     print("Bleach detection: " + ", ".join(f"{k}={v}" for k, v in bleach_params.items()))
 
+    all_curves = []
     for f in files:
         name = f.stem
         stack = tifffile.imread(f).astype(np.float64)              # (frames, rows, columns)
@@ -88,8 +91,15 @@ def main():
         tab.to_csv(bleach_dir / f"{name}_all_droplets.csv", index=False)
         spot_tab.to_csv(bleach_dir / f"{name}_bleached_droplets.csv", index=False)
 
-        print(f"  {name}: {labels.max()} droplets, {int(tab['moved'].sum())} moved (excluded), {int(tab['bleached'].sum())} bleached")
+        # 3. recovery curves of the bleached droplets
+        curves = recovery_curves.measure(stack, labels, spots, tab, FRAME_PRE)
+        curves.insert(0, "file", name)
+        curves.to_csv(curves_dir / f"{name}_recovery_curves.csv", index=False)
+        all_curves.append(curves)
 
+        print(f"  {name}: {labels.max()} droplets, {int(tab['moved'].sum())} moved (excluded), {int(tab['bleached'].sum())} bleached")
+        
+    pd.concat(all_curves, ignore_index=True).to_csv(curves_dir / "recovery_curves.csv", index=False)
     print(f"Done. Results in {args.output}")
 
 
