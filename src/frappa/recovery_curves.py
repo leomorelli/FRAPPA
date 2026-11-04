@@ -75,3 +75,34 @@ def all_files_curves_figure(curves):
     axes[0, 0].set_ylabel("final (normalized intensity)")
     fig.tight_layout()
     return fig
+
+
+def steps_figure(df, frame_pre):
+    """Normalization steps of one file. Panel 1: whole bleached droplets, tot(t)/tot(pre), and the
+    reference, ref(t)/ref(pre) (thick black); then B, D and final normalization (with the mean ± SD).
+    Each droplet has the same colour in every panel."""
+    ref = df.groupby("frame")["ref"].first()                 # the same for every droplet of the file
+    fig, axes = plt.subplots(1, 4, figsize=(20, 4))
+    for d, dd in df.groupby("droplet"):
+        axes[0].plot(dd["frame"], dd["tot"] / dd["tot"].iloc[frame_pre], lw=0.8)
+        axes[1].plot(dd["frame"], dd["B"], lw=0.8)
+        axes[2].plot(dd["frame"], dd["D"], lw=0.8)
+        axes[3].plot(dd["frame"], dd["final"], lw=0.8, label=d)
+    axes[0].plot(ref.index, ref / ref[frame_pre], "k-", lw=2, label="reference")
+    mean = df.groupby("frame")["final"].mean()
+    sd = df.groupby("frame")["final"].std()
+    axes[3].plot(mean.index, mean, "k-", lw=2, label="mean")
+    axes[3].fill_between(mean.index, mean - sd, mean + sd, color="k", alpha=0.15)
+
+    titles = ["whole droplets tot(t)/tot(pre), reference ref(t)/ref(pre) in black", 
+              "B = A / A(pre)", "D = C / C(pre)", "final = B / D"]
+    for ax, title in zip(axes, titles):
+        ax.axhline(1, color="gray", ls=":", lw=0.8)
+        ax.set_title(title, fontsize=10)
+        ax.set_xlabel("frame")
+        ax.xaxis.set_major_locator(MultipleLocator(5))
+    axes[0].set_ylabel("normalized intensity")
+    axes[3].legend(title="droplet", fontsize=6, title_fontsize=7, ncol=2)
+    fig.suptitle(f"{df['file'].iloc[0]}", fontsize=13)
+    fig.tight_layout()
+    return fig

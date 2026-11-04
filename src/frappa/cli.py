@@ -121,6 +121,9 @@ def main():
         if not curves.empty:
             save_figure(recovery_curves.curves_figure(curves),
                         curves_dir / "figures", f"{name}_recovery_curves", **fig_opts)
+        if args.all_plots and not curves.empty:
+            save_figure(recovery_curves.steps_figure(curves, FRAME_PRE),
+                        curves_dir / "figures", f"{name}_normalization_steps", **fig_opts)
         all_curves.append(curves)
 
         print(f"  {name}: {labels.max()} droplets, {int(tab['moved'].sum())} moved (excluded), {int(tab['bleached'].sum())} bleached")
