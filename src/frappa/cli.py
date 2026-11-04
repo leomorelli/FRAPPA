@@ -85,6 +85,7 @@ def main():
     print("Bleach detection: " + ", ".join(f"{k}={v}" for k, v in bleach_params.items()))
 
     all_curves = []
+    all_tables = {}
     for f in files:
         name = f.stem
         stack = tifffile.imread(f).astype(np.float64)              # (frames, rows, columns)
@@ -99,12 +100,19 @@ def main():
                         seg_dir / "figures", f"{name}_segmentation_summary", **fig_opts)
 
         # 2. bleached droplets and spots
-        tab, spots, spot_tab = bleach_detection.detect(pre, post, labels, bleach_params)
+        tab, spots, spot_tab, gained = bleach_detection.detect(pre, post, labels, bleach_params)
+        all_tables[name] = tab
         tifffile.imwrite(bleach_dir / f"{name}_spot_labels.tif", spots.astype(np.uint16))
         tab.to_csv(bleach_dir / f"{name}_all_droplets.csv", index=False)
         spot_tab.to_csv(bleach_dir / f"{name}_bleached_droplets.csv", index=False)
         save_figure(bleach_detection.overview_figure(name, pre, post, labels, spots, tab),
                     bleach_dir / "figures", f"{name}_bleach_overview", **fig_opts)
+        if args.all_plots and tab["moved"].any():
+            save_figure(bleach_detection.moved_figure(name, pre, post, labels, gained, tab),
+                        bleach_dir / "figures", f"{name}_moved_droplets", **fig_opts)
+        if args.all_plots and tab["bleached"].any():
+            save_figure(bleach_detection.spots_figure(name, pre, post, labels, spots, tab),
+                        bleach_dir / "figures", f"{name}_bleached_spots", **fig_opts)
 
         # 3. recovery curves of the bleached droplets
         curves = recovery_curves.measure(stack, labels, spots, tab, FRAME_PRE)
@@ -116,11 +124,14 @@ def main():
         all_curves.append(curves)
 
         print(f"  {name}: {labels.max()} droplets, {int(tab['moved'].sum())} moved (excluded), {int(tab['bleached'].sum())} bleached")
-
+    
+    if args.all_plots:
+        save_figure(bleach_detection.peak_drop_figure(all_tables, args.min_peak_drop),    # peak drop, one panel per file
+                    bleach_dir / "figures", "peak_drop", **fig_opts)
     all_curves = pd.concat(all_curves, ignore_index=True)
     all_curves.to_csv(curves_dir / "recovery_curves.csv", index=False)
     if not all_curves.empty:
-        save_figure(recovery_curves.all_files_curves_figure(all_curves),
+        save_figure(recovery_curves.all_files_curves_figure(all_curves),        # recovery curves, one panel per file
                     curves_dir / "figures", "mean_final_curves", **fig_opts)
 
     print(f"Done. Results in {args.output}")
