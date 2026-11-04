@@ -45,6 +45,7 @@ def build_parser():
                     help="spot = pixels whose drop is at least this fraction of the droplet's peak drop (default: %(default)s)")
 
     fig = parser.add_argument_group("figures")
+    fig.add_argument("--all-plots", action="store_true", help="also save the diagnostic figures of every step")
     fig.add_argument("--figure-format", nargs="+", default=["png"], choices=["png", "pdf", "svg"],
                      help="file format(s) of the figures (default: %(default)s), space separated for multiple formats")
     fig.add_argument("--dpi", type=int, default=150, help="resolution of the figures (default: %(default)s)")
@@ -69,7 +70,7 @@ def main():
                 "date": datetime.now().isoformat(timespec="seconds"),
                 "command": "frappa " + " ".join(sys.argv[1:]),
                 "input_files": [f.name for f in files],
-                "figures": {**fig_opts},
+                "figures": {"all_plots": args.all_plots, **fig_opts},
                 "parameters": {"segmentation": seg_params}}
     with open(args.output / "run_info.json", "w") as fh:
         json.dump(run_info, fh, indent=2)
@@ -90,8 +91,12 @@ def main():
         pre, post = stack[FRAME_PRE], stack[FRAME_POST]
 
         # 1. droplets in the pre-bleach frame
-        labels = droplet_segmentation.segment(pre, seg_params)
-        tifffile.imwrite(seg_dir / f"{f.stem}_droplet_labels.tif", labels.astype(np.uint16))
+        steps = droplet_segmentation.segment(pre, seg_params)
+        labels = steps["final"]
+        tifffile.imwrite(seg_dir / f"{name}_droplet_labels.tif", labels.astype(np.uint16))
+        if args.all_plots:
+            save_figure(droplet_segmentation.summary_figure(name, steps, seg_params),
+                        seg_dir / "figures", f"{name}_segmentation_summary", **fig_opts)
 
         # 2. bleached droplets and spots
         tab, spots, spot_tab = bleach_detection.detect(pre, post, labels, bleach_params)
