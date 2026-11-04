@@ -76,7 +76,7 @@ def detect(pre, post, labels, p):
     post_s = filters.gaussian(post, sigma=p["bl_sigma"], preserve_range=True)
     
     motion = droplet_motion(pre_s, post_s, labels, p["territory"], p["gain_frac"])
-    drop = relative_drop(pre, post, labels)
+    drop = relative_drop(pre_s, post_s, labels)
     tab = droplet_drop_table(drop, labels).merge(motion, on="droplet")
     tab["moved"] = tab["shift_px"] > p["max_shift"]
     tab["bleached"] = (tab["peak_drop"] >= p["min_peak_drop"]) & ~tab["moved"]
