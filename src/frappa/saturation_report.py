@@ -9,9 +9,14 @@ Bleached droplets whose spot or whole droplet has a saturated fraction above the
 the bleach are flagged. Nothing is excluded: the report only shows where saturation may affect the results.
 """
 
-
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from matplotlib.colors import ListedColormap
+from matplotlib.ticker import MultipleLocator
+RED = ListedColormap(["red"])
+
+from .common import crop_around
 
 
 def saturation_per_frame(saturated, label_img, ids):
@@ -73,3 +78,64 @@ def summary_text(counts, threshold):
             f"      references more than {th} saturated: {counts['references_above_before']} before "
             f"the bleach, {counts['references_above_after']} after")
             
+
+def over_time_figure(sat_tables, per_frame_tables, threshold):
+    """Saturated fraction of each droplet over time, one panel per file (coloured: bleached
+    droplets, legend = droplet ID; gray: references; droplets never saturated are not drawn).
+    sat_tables: file name -> per-droplet table from report()
+    per_frame_tables: file name -> per-frame table of the whole droplets."""
+    fig, axes = plt.subplots(1, len(sat_tables), squeeze=False, figsize=(5 * len(sat_tables), 4))    
+    for ax, (name, sf) in zip(axes[0], per_frame_tables.items()):
+        roles = sat_tables[name].set_index("droplet")["role"]
+        for d, row in sf.iterrows():
+            if row.max() == 0:                        # never saturated: not drawn
+                continue
+            if roles[d] == "bleached":
+                ax.plot(row.index, row.values, "-", lw=1.2, label=str(d))
+            else:
+                ax.plot(row.index, row.values, "-", lw=0.6, color="0.7", zorder=1)
+        ax.set_title(name, fontsize=10)
+        ax.set_xlabel("frame")
+        ax.set_ylabel("saturated fraction of the droplet")
+        ax.set_ylim(-0.02, 1.02)
+        ax.xaxis.set_major_locator(MultipleLocator(5))
+        ax.axhline(threshold, color="red", ls="--", lw=0.8)
+        if ax.get_legend_handles_labels()[0]:
+            ax.legend(title="bleached", fontsize=6, title_fontsize=7, ncol=2)
+    fig.tight_layout()
+    return fig
+
+
+def gallery_figure(name, stack, sat_value, labels, spots, sat_table, per_frame, frame_pre, threshold, pad=8):
+    """Bleached droplets: pre-bleach frame (top) and first post-bleach frame (bottom), saturated
+    pixels in red, droplet (green) and spot (cyan) outlines. The values in each panel are the
+    saturated fractions of the spot and the whole droplet in that frame (the worst post-bleach
+    values are in the report table). * = above the threshold before the bleach."""
+    flags = sat_table.set_index("droplet")
+    ids = flags.index[flags["role"] == "bleached"]
+    fig, axes = plt.subplots(2, len(ids), squeeze=False, figsize=(2.5 * len(ids), 5.5))
+    for j, d in enumerate(ids):
+        sl = crop_around(labels, d, pad)
+        for i, t in enumerate((frame_pre, frame_pre + 1)):
+            img = stack[t][sl]
+            saturated = img >= sat_value
+            ax = axes[i, j]
+            ax.imshow(img, cmap="gray", vmin=0, vmax=sat_value)
+            if saturated.any():
+                ax.imshow(np.ma.masked_where(~saturated, saturated), cmap=RED, alpha=0.7,
+                          interpolation="nearest")
+            ax.contour(labels[sl] == d, levels=[0.5], colors="lime", linewidths=0.7)
+            ax.contour(spots[sl] == d, levels=[0.5], colors="cyan", linewidths=0.7)
+            ax.text(0.03, 0.97, f"spot {per_frame['spot'].loc[d, t]:.0%}\n"
+                                f"droplet {per_frame['droplet'].loc[d, t]:.0%}",
+                    transform=ax.transAxes, color="yellow", fontsize=7, va="top")
+            ax.axis("off")
+        mark = " *" if (flags.loc[d, "droplet_pre_above"] or flags.loc[d, "spot_pre_above"]) else ""
+        axes[0, j].set_title(f"droplet {d}{mark}", fontsize=8)
+    axes[0, 0].text(-0.15, 0.5, "pre-bleach", transform=axes[0, 0].transAxes, rotation=90, va="center")
+    axes[1, 0].text(-0.15, 0.5, "first post-bleach", transform=axes[1, 0].transAxes, rotation=90,
+                    va="center")
+    fig.suptitle(f"{name}: bleached droplets (red = saturated; values = saturated fraction in that "
+                 f"frame; * = above {threshold:.0%} before the bleach)", fontsize=10)
+    fig.tight_layout()
+    return fig

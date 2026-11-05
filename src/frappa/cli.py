@@ -51,7 +51,7 @@ def build_parser():
     fig.add_argument("--dpi", type=int, default=150, help="resolution of the figures (default: %(default)s)")
 
     sr = parser.add_argument_group("saturation report parameters")
-    sr.add_argument("--saturation-report", action="store_true", help="include report on how much each droplet is saturated")
+    sr.add_argument("--saturation-report", action="store_true", help="write the saturation report: tables per file, summary and figures")
     sr.add_argument("--saturation-threshold", type=float, default=0.75,
                     help="report droplets and spots whose saturated fraction is above this (default: %(default)s)")
 
@@ -99,6 +99,8 @@ def main():
     all_curves = []
     all_tables = {}
     saturation_counts = []
+    all_sat_tables = {}
+    all_per_frame = {}
     for f in files:
         name = f.stem
         raw = tifffile.imread(f)                 # (frames, rows, columns)
@@ -139,7 +141,14 @@ def main():
             per_frame["spot"].to_csv(saturation_dir / f"{name}_spot_saturation_per_frame.csv",
                                      index_label="droplet")
             saturation_counts.append({"file": name, **counts})
-    
+            all_sat_tables[name] = sat_table
+            all_per_frame[name] = per_frame["droplet"]
+            if counts["bleached"]:
+                save_figure(saturation_report.gallery_figure(name, stack, sat_value, labels, spots,
+                                                             sat_table, per_frame, FRAME_PRE,
+                                                             args.saturation_threshold),
+                            saturation_dir / "figures", f"{name}_saturation_gallery", **fig_opts)
+
         # 3. recovery curves of the bleached droplets
         curves = recovery_curves.measure(stack, labels, spots, tab, FRAME_PRE)
         curves.insert(0, "file", name)
@@ -166,6 +175,9 @@ def main():
                     curves_dir / "figures", "mean_final_curves", **fig_opts)
     if args.saturation_report:
         pd.DataFrame(saturation_counts).to_csv(saturation_dir / "saturation_summary.csv", index=False)
+        save_figure(saturation_report.over_time_figure(all_sat_tables, all_per_frame, 
+                                                       args.saturation_threshold),
+                    saturation_dir / "figures", "saturation_over_time", **fig_opts)
 
     print(f"Done. Results in {args.output}")
 
