@@ -132,9 +132,11 @@ def main():
                         bleach_dir / "figures", f"{name}_bleached_spots", **fig_opts)
 
         # saturation report (optional)
+        dashed = set()                     # droplets drawn dashed in the curve figures
         if args.saturation_report:
             sat_table, per_frame, counts = saturation_report.report(stack, sat_value, labels, spots, tab,
                                                                     FRAME_PRE, args.saturation_threshold)
+            dashed = set(sat_table.loc[sat_table["spot_pre_above"], "droplet"])
             sat_table.to_csv(saturation_dir / f"{name}_saturation.csv", index=False)
             per_frame["droplet"].to_csv(saturation_dir / f"{name}_saturation_per_frame.csv",
                                         index_label="droplet")
@@ -154,10 +156,10 @@ def main():
         curves.insert(0, "file", name)
         curves.to_csv(curves_dir / f"{name}_recovery_curves.csv", index=False)
         if not curves.empty:
-            save_figure(recovery_curves.curves_figure(curves),
+            save_figure(recovery_curves.curves_figure(curves, dashed),
                         curves_dir / "figures", f"{name}_recovery_curves", **fig_opts)
-        if args.all_plots and not curves.empty:
-            save_figure(recovery_curves.steps_figure(curves, FRAME_PRE),
+            if args.all_plots:
+                save_figure(recovery_curves.steps_figure(curves, FRAME_PRE, dashed),
                         curves_dir / "figures", f"{name}_normalization_steps", **fig_opts)
         all_curves.append(curves)
         
