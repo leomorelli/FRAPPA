@@ -11,7 +11,7 @@ import pandas as pd
 import tifffile
 
 from . import __version__
-from . import bleach_detection, droplet_segmentation, recovery_curves
+from . import bleach_detection, droplet_segmentation, recovery_curves, saturation_report
 from .common import save_figure
 
 
@@ -50,6 +50,11 @@ def build_parser():
                      help="file format(s) of the figures (default: %(default)s), space separated for multiple formats")
     fig.add_argument("--dpi", type=int, default=150, help="resolution of the figures (default: %(default)s)")
 
+    sr = parser.add_argument_group("saturation report parameters")
+    sr.add_argument("--saturation-report", action="store_true", help="include report on how much each droplet is saturated")
+    sr.add_argument("--saturation-threshold", type=float, default=0.75,
+                    help="report droplets and spots whose saturated fraction is above this (default: %(default)s)")
+
     return parser
 
 
@@ -71,7 +76,9 @@ def main():
                 "command": "frappa " + " ".join(sys.argv[1:]),
                 "input_files": [f.name for f in files],
                 "figures": {"all_plots": args.all_plots, **fig_opts},
-                "parameters": {"segmentation": seg_params}}
+                "parameters": {"segmentation": seg_params},
+                "saturation report": {"enabled": args.saturation_report, 
+                                      "threshold": args.saturation_threshold}}
     with open(args.output / "run_info.json", "w") as fh:
         json.dump(run_info, fh, indent=2)
 
@@ -80,15 +87,23 @@ def main():
     curves_dir = args.output / "recovery_curves"
     for folder in (seg_dir, bleach_dir, curves_dir):
         folder.mkdir(exist_ok=True)
+    if args.saturation_report:
+        saturation_dir = args.output / "saturation_report"
+        saturation_dir.mkdir(exist_ok=True)
 
     print("Segmentation of the pre-bleach frame: " + ", ".join(f"{k}={v}" for k, v in seg_params.items()))
     print("Bleach detection: " + ", ".join(f"{k}={v}" for k, v in bleach_params.items()))
+    if args.saturation_report:
+        print(f"Saturation report enabled: threshold={args.saturation_threshold}")
 
     all_curves = []
     all_tables = {}
+    saturation_counts = []
     for f in files:
         name = f.stem
-        stack = tifffile.imread(f).astype(np.float64)              # (frames, rows, columns)
+        raw = tifffile.imread(f)                 # (frames, rows, columns)
+        sat_value = int(np.iinfo(raw.dtype).max)         # 255
+        stack = raw.astype(np.float64) 
         pre, post = stack[FRAME_PRE], stack[FRAME_POST]
 
         # 1. droplets in the pre-bleach frame
@@ -114,6 +129,17 @@ def main():
             save_figure(bleach_detection.spots_figure(name, pre, post, labels, spots, tab),
                         bleach_dir / "figures", f"{name}_bleached_spots", **fig_opts)
 
+        # saturation report (optional)
+        if args.saturation_report:
+            sat_table, per_frame, counts = saturation_report.report(stack, sat_value, labels, spots, tab,
+                                                                    FRAME_PRE, args.saturation_threshold)
+            sat_table.to_csv(saturation_dir / f"{name}_saturation.csv", index=False)
+            per_frame["droplet"].to_csv(saturation_dir / f"{name}_saturation_per_frame.csv",
+                                        index_label="droplet")
+            per_frame["spot"].to_csv(saturation_dir / f"{name}_spot_saturation_per_frame.csv",
+                                     index_label="droplet")
+            saturation_counts.append({"file": name, **counts})
+    
         # 3. recovery curves of the bleached droplets
         curves = recovery_curves.measure(stack, labels, spots, tab, FRAME_PRE)
         curves.insert(0, "file", name)
@@ -125,8 +151,10 @@ def main():
             save_figure(recovery_curves.steps_figure(curves, FRAME_PRE),
                         curves_dir / "figures", f"{name}_normalization_steps", **fig_opts)
         all_curves.append(curves)
-
+        
         print(f"  {name}: {labels.max()} droplets, {int(tab['moved'].sum())} moved (excluded), {int(tab['bleached'].sum())} bleached")
+        if args.saturation_report:
+            print(saturation_report.summary_text(counts, args.saturation_threshold))
     
     if args.all_plots:
         save_figure(bleach_detection.peak_drop_figure(all_tables, args.min_peak_drop),    # peak drop, one panel per file
@@ -136,6 +164,8 @@ def main():
     if not all_curves.empty:
         save_figure(recovery_curves.all_files_curves_figure(all_curves),        # recovery curves, one panel per file
                     curves_dir / "figures", "mean_final_curves", **fig_opts)
+    if args.saturation_report:
+        pd.DataFrame(saturation_counts).to_csv(saturation_dir / "saturation_summary.csv", index=False)
 
     print(f"Done. Results in {args.output}")
 
