@@ -36,17 +36,19 @@ def measure(stack, labels, spots, tab, frame_pre):
     return pd.concat(rows, ignore_index=True) if rows else pd.DataFrame()
 
 
-def curves_figure(df):
+def curves_figure(df, dashed=frozenset()):
     """Recovery curves of one file: each droplet in colour (ID in the legend), mean ± SD in black."""
     fig, ax = plt.subplots(figsize=(6, 4.5))
     for d, dd in df.groupby("droplet"):
-        ax.plot(dd["frame"], dd["final"], lw=0.8, label=d)
+        ls = "--" if d in dashed else "-"
+        ax.plot(dd["frame"], dd["final"], ls=ls, lw=0.8, label=d)
     mean = df.groupby("frame")["final"].mean()
     sd = df.groupby("frame")["final"].std()
     ax.plot(mean.index, mean, "k-o", markersize=3)
     ax.fill_between(mean.index, mean - sd, mean + sd, color="k", alpha=0.1)
     ax.axhline(1, color="gray", ls=":", lw=0.8)
-    ax.set_title(f"{df['file'].iloc[0]} (n = {df['droplet'].nunique()})", fontsize=10)
+    note = "(dashed: spot above the saturation threshold before the bleach)" if dashed else ""
+    ax.set_title(f"{df['file'].iloc[0]} (n = {df['droplet'].nunique()}) {note}", fontsize=10)
     ax.set_xlabel("frame")
     ax.set_ylabel("final (normalized intensity)")
     ax.xaxis.set_major_locator(MultipleLocator(5))
@@ -77,17 +79,18 @@ def all_files_curves_figure(curves):
     return fig
 
 
-def steps_figure(df, frame_pre):
+def steps_figure(df, frame_pre, dashed=frozenset()):
     """Normalization steps of one file. Panel 1: whole bleached droplets, tot(t)/tot(pre), and the
     reference, ref(t)/ref(pre) (thick black); then B, D and final normalization (with the mean ± SD).
     Each droplet has the same colour in every panel."""
     ref = df.groupby("frame")["ref"].first()                 # the same for every droplet of the file
     fig, axes = plt.subplots(1, 4, figsize=(20, 4))
     for d, dd in df.groupby("droplet"):
-        axes[0].plot(dd["frame"], dd["tot"] / dd["tot"].iloc[frame_pre], lw=0.8)
-        axes[1].plot(dd["frame"], dd["B"], lw=0.8)
-        axes[2].plot(dd["frame"], dd["D"], lw=0.8)
-        axes[3].plot(dd["frame"], dd["final"], lw=0.8, label=d)
+        ls = "--" if d in dashed else "-"
+        axes[0].plot(dd["frame"], dd["tot"] / dd["tot"].iloc[frame_pre], ls=ls, lw=0.8)
+        axes[1].plot(dd["frame"], dd["B"], ls=ls, lw=0.8)
+        axes[2].plot(dd["frame"], dd["D"], ls=ls, lw=0.8)
+        axes[3].plot(dd["frame"], dd["final"], ls=ls, lw=0.8, label=d)
     axes[0].plot(ref.index, ref / ref[frame_pre], "k-", lw=2, label="reference")
     mean = df.groupby("frame")["final"].mean()
     sd = df.groupby("frame")["final"].std()
@@ -103,6 +106,7 @@ def steps_figure(df, frame_pre):
         ax.xaxis.set_major_locator(MultipleLocator(5))
     axes[0].set_ylabel("normalized intensity")
     axes[3].legend(title="droplet", fontsize=6, title_fontsize=7, ncol=2)
-    fig.suptitle(f"{df['file'].iloc[0]}", fontsize=13)
+    note = "(dashed: spot above the saturation threshold before the bleach)" if dashed else ""
+    fig.suptitle(f"{df['file'].iloc[0]}: normalization steps {note}", fontsize=11)
     fig.tight_layout()
     return fig
