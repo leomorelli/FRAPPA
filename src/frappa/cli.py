@@ -21,7 +21,8 @@ FRAME_POST = 1    # index of the first post-bleach frame
 
 def build_parser():
     parser = argparse.ArgumentParser(prog="frappa", description=__doc__)
-    parser.add_argument("-i", "--input", type=Path, required=True, help="folder with the TIFF stacks")
+    parser.add_argument("-i", "--input", type=Path, nargs="+", required=True,
+                        help="TIFF stacks: one or more files and/or folders (with the .tif/.tiff files in it)")
     parser.add_argument("-o", "--output", type=Path, required=True, help="output folder")
 
     seg = parser.add_argument_group("segmentation parameters")
@@ -57,6 +58,19 @@ def build_parser():
 
     return parser
 
+def find_files(inputs):
+    """TIFF stacks to analyse: all .tif/.tiff files in the given folders and/or the given files."""
+    files = []
+    for path in inputs:
+        if path.is_dir():
+            files += [p for p in path.iterdir() if p.suffix.lower() in (".tif", ".tiff")]
+        elif path.is_file():
+            files.append(path)
+        else:
+            sys.exit(f"Not found: {path}")
+    if not files:
+        sys.exit("No TIFF files found")
+    return sorted(files)
 
 def main():
     args = build_parser().parse_args()
@@ -66,15 +80,15 @@ def main():
                      "min_peak_drop": args.min_peak_drop, "spot_fraction": args.spot_fraction}
     fig_opts = {"formats": args.figure_format, "dpi": args.dpi}
 
-    files = sorted(p for p in args.input.iterdir() if p.suffix.lower() in (".tif", ".tiff"))
-    print(f"{len(files)} TIFF file(s) in {args.input}")
+    files = find_files(args.input)
+    print(f"{len(files)} file(s): {', '.join(f.name for f in files)}")
 
     # record how this run was made
     args.output.mkdir(parents=True, exist_ok=True)
     run_info = {"frappa_version": __version__,
                 "date": datetime.now().isoformat(timespec="seconds"),
                 "command": "frappa " + " ".join(sys.argv[1:]),
-                "input_files": [f.name for f in files],
+                "input_files": [str(f) for f in files],
                 "figures": {"all_plots": args.all_plots, **fig_opts},
                 "parameters": {"segmentation": seg_params,
                                "bleach_detection": bleach_params},
