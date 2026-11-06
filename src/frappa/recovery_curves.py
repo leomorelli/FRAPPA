@@ -5,7 +5,8 @@
   final = B(t) / D(t)
 
 spot = bleached region, tot = whole bleached droplet, ref = reference droplets (not moved, not
-bleached; all their pixels pooled). All are mean intensities per frame. No background subtraction.
+bleached, not manually excluded; all their pixels pooled). All are mean intensities per frame.
+No background subtraction.
 """
 
 import matplotlib.pyplot as plt
@@ -16,15 +17,15 @@ from matplotlib.ticker import MultipleLocator
 
 def measure(stack, labels, spots, tab, frame_pre):
     """Intensities and normalization of every bleached droplet of one file.
-    tab: table of all droplets from bleach_detection (with 'moved' and 'bleached').
+    tab: table of all droplets from bleach_detection (with 'moved', 'bleached', and 'excluded').
     Returns a long table: one row per bleached droplet and frame."""
 
-    ref_ids = tab.loc[~tab["moved"] & ~tab["bleached"], "droplet"]
+    ref_ids = tab.loc[~tab["moved"] & ~tab["bleached"] & ~tab["excluded"], "droplet"]
     ref = stack[:, np.isin(labels, ref_ids)].mean(axis=1)       # one value per frame
     frames = np.arange(stack.shape[0])
 
     rows = []
-    for d in tab.loc[tab["bleached"], "droplet"]:
+    for d in tab.loc[tab["bleached"] & ~tab["excluded"], "droplet"]:
         spot = stack[:, spots == d].mean(axis=1)          # bleached region
         tot = stack[:, labels == d].mean(axis=1)          # whole bleached droplet
         A = spot / ref

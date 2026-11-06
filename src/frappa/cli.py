@@ -24,6 +24,8 @@ def build_parser():
     parser.add_argument("-i", "--input", type=Path, nargs="+", required=True,
                         help="TIFF stacks: one or more files and/or folders (with the .tif/.tiff files in it)")
     parser.add_argument("-o", "--output", type=Path, required=True, help="output folder")
+    parser.add_argument("--exclude", type=Path,
+                        help="CSV file with the droplets to exclude. Columns: file name, droplet, and optionally the reason")
 
     seg = parser.add_argument_group("segmentation parameters")
     seg.add_argument("--sigma", type=float, default=0.5, help="Gaussian smoothing before CLAHE, in pixels (default: %(default)s)")
@@ -72,6 +74,22 @@ def find_files(inputs):
         sys.exit("No TIFF files found")
     return sorted(files)
 
+def read_exclusions(path):
+    """Droplets to exclude, from a CSV file with columns file, droplet (and optionally reason).
+    Without a file (path None), an empty table."""
+    if path is None:
+        return pd.DataFrame(columns=["file", "droplet", "reason"])
+    if not path.is_file():
+        sys.exit(f"Exclusion file not found: {path}")
+    exclusions = pd.read_csv(path, skipinitialspace=True)
+    missing = {"file", "droplet"} - set(exclusions.columns)    # required columns
+    if missing:
+        sys.exit(f"{path}: missing column(s) {', '.join(sorted(missing))}. "
+                 f"The first line must be the header: file,droplet,reason")
+    if "reason" not in exclusions.columns:
+        exclusions["reason"] = ""
+    return exclusions
+
 def main():
     args = build_parser().parse_args()
     seg_params = {"sigma": args.sigma, "kernel_size": args.kernel_size, "clip_limit": args.clip_limit,
@@ -82,6 +100,12 @@ def main():
 
     files = find_files(args.input)
     print(f"{len(files)} file(s): {', '.join(f.name for f in files)}")
+    exclusions = read_exclusions(args.exclude)
+    unknown = set(exclusions["file"]) - {f.stem for f in files}
+    if unknown:
+        print(f"Warning: exclusion file lists files that are not in the input: {', '.join(sorted(unknown))}")
+    if len(exclusions):
+        print(f"Excluding {len(exclusions)} droplet(s) listed in {args.exclude}")
 
     # record how this run was made
     args.output.mkdir(parents=True, exist_ok=True)
@@ -93,7 +117,9 @@ def main():
                 "parameters": {"segmentation": seg_params,
                                "bleach_detection": bleach_params},
                 "saturation report": {"enabled": args.saturation_report, 
-                                      "threshold": args.saturation_threshold}}
+                                      "threshold": args.saturation_threshold},
+                "exclusion_file": str(args.exclude) if args.exclude else None,                      
+                "exclusions": exclusions.to_dict(orient="records")}
     with open(args.output / "run_info.json", "w") as fh:
         json.dump(run_info, fh, indent=2)
 
@@ -116,6 +142,7 @@ def main():
     saturation_counts = []
     all_sat_tables = {}
     all_per_frame = {}
+
     for f in files:
         name = f.stem
         raw = tifffile.imread(f)                 # (frames, rows, columns)
@@ -123,7 +150,7 @@ def main():
         stack = raw.astype(np.float64) 
         pre, post = stack[FRAME_PRE], stack[FRAME_POST]
 
-        # 1. droplets in the pre-bleach frame
+        ## 1. droplets in the pre-bleach frame ##
         steps = droplet_segmentation.segment(pre, seg_params)
         labels = steps["final"]
         tifffile.imwrite(seg_dir / f"{name}_droplet_labels.tif", labels.astype(np.uint16))
@@ -131,8 +158,17 @@ def main():
             save_figure(droplet_segmentation.summary_figure(name, steps, seg_params),
                         seg_dir / "figures", f"{name}_segmentation_summary", **fig_opts)
 
-        # 2. bleached droplets and spots
+        ## 2. bleached droplets and spots ##
         tab, spots, spot_tab, gained = bleach_detection.detect(pre, post, labels, bleach_params)
+        
+        # manual curation, mark droplets excluded by hand
+        ex = exclusions[exclusions["file"] == name]
+        tab["excluded"] = tab["droplet"].isin(ex["droplet"])
+        tab["exclusion_reason"] = tab["droplet"].map(ex.set_index("droplet")["reason"])
+        not_found = set(ex["droplet"]) - set(tab["droplet"])
+        if not_found:
+            print(f"  Warning: {name}: excluded droplet(s) not found: {sorted(not_found)}")
+
         all_tables[name] = tab
         tifffile.imwrite(bleach_dir / f"{name}_spot_labels.tif", spots.astype(np.uint16))
         tab.to_csv(bleach_dir / f"{name}_all_droplets.csv", index=False)
@@ -166,7 +202,7 @@ def main():
                                                              args.saturation_threshold),
                             saturation_dir / "figures", f"{name}_saturation_gallery", **fig_opts)
 
-        # 3. recovery curves of the bleached droplets
+        ## 3. recovery curves of the bleached droplets ##
         curves = recovery_curves.measure(stack, labels, spots, tab, FRAME_PRE)
         curves.insert(0, "file", name)
         curves.to_csv(curves_dir / f"{name}_recovery_curves.csv", index=False)
@@ -178,7 +214,15 @@ def main():
                         curves_dir / "figures", f"{name}_normalization_steps", **fig_opts)
         all_curves.append(curves)
         
-        print(f"  {name}: {labels.max()} droplets, {int(tab['moved'].sum())} moved (excluded), {int(tab['bleached'].sum())} bleached")
+        # print message
+        moved = tab["moved"]
+        excluded = tab["excluded"] & ~moved              # a moved droplet is counted as moved
+        with_curve = tab["bleached"] & ~tab["excluded"]
+        references = ~moved & ~tab["bleached"] & ~tab["excluded"]
+        print(f"  {name}: {len(tab)} droplets\n"
+              f"    analysed: {int(with_curve.sum())} bleached (recovery curves), {int(references.sum())} references\n"
+              f"    left out: {int(moved.sum())} moved, {int(excluded.sum())} manually excluded")
+
         if args.saturation_report:
             print(saturation_report.summary_text(counts, args.saturation_threshold))
     

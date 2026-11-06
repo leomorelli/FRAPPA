@@ -7,6 +7,9 @@ the fraction in the pre-bleach frame, and the worst post-bleach fraction with it
 
 Bleached droplets whose spot or whole droplet has a saturated fraction above the threshold before
 the bleach are flagged. Nothing is excluded: the report only shows where saturation may affect the results.
+
+The report covers all droplets that did not "move", independently of --exclude: it describes the data,
+before any manual curation.
 """
 
 import matplotlib.pyplot as plt
