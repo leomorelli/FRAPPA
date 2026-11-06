@@ -221,7 +221,7 @@ def main():
         references = ~moved & ~tab["bleached"] & ~tab["excluded"]
         print(f"  {name}: {len(tab)} droplets\n"
               f"    analysed: {int(with_curve.sum())} bleached (recovery curves), {int(references.sum())} references\n"
-              f"    left out: {int(moved.sum())} moved, {int(excluded.sum())} excluded by hand")
+              f"    left out: {int(moved.sum())} moved, {int(excluded.sum())} manually excluded")
 
         if args.saturation_report:
             print(saturation_report.summary_text(counts, args.saturation_threshold))
