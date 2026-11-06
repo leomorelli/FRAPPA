@@ -145,6 +145,7 @@ def peak_drop_figure(tables, min_peak_drop):
 def spots_figure(name, pre, post, labels, spots, tab, pad=8):
     """Bleached droplets: pre-bleach, first post-bleach, and post-bleach with the droplet (green) and its spot (cyan)."""
     ids = tab.loc[tab["bleached"], "droplet"]
+    excluded_ids = set(tab.loc[tab["excluded"], "droplet"])
     lo, hi = np.percentile(pre, (1, 99.5))
     fig, axes = plt.subplots(3, len(ids), squeeze=False, figsize=(2.5 * len(ids), 8))
     for j, d in enumerate(ids):
@@ -155,7 +156,7 @@ def spots_figure(name, pre, post, labels, spots, tab, pad=8):
             ax.axis("off")
         axes[2, j].contour(labels[sl] == d, levels=[0.5], colors="lime", linewidths=0.7)
         axes[2, j].contour(spots[sl] == d, levels=[0.5], colors="cyan", linewidths=0.9)
-        axes[0, j].set_title(f"droplet {d}", fontsize=9)
+        axes[0, j].set_title(f"droplet {d}" + (" (excluded)" if d in excluded_ids else ""), fontsize=9)
     fig.suptitle(f"{name}: bleached droplets (rows: pre-bleach, first post-bleach, spot in cyan)", fontsize=10)
     fig.tight_layout()
     return fig
@@ -163,9 +164,11 @@ def spots_figure(name, pre, post, labels, spots, tab, pad=8):
 
 def overview_figure(name, pre, post, labels, spots, tab):
     """Pre-bleach and first post-bleach frames; on the post-bleach frame: all droplets (green),
-    bleached spots (magenta) with the droplet IDs, moved droplets (orange)."""
+    bleached spots (magenta) with the droplet IDs, moved droplets (orange), manually excluded droplets (red)"""
     lo, hi = np.percentile(pre, (1, 99.5))                  # same contrast for both frames
     moved = np.isin(labels, tab.loc[tab["moved"], "droplet"])
+    excluded_ids = tab.loc[tab["excluded"], "droplet"]
+    excluded = np.isin(labels, excluded_ids)
     bleached_ids = tab.loc[tab["bleached"], "droplet"]
 
     fig, axes = plt.subplots(1, 3, figsize=(18, 6))
@@ -178,6 +181,8 @@ def overview_figure(name, pre, post, labels, spots, tab):
         axes[2].contour(labels == d, levels=[0.5], colors="lime", linewidths=0.4)
     if moved.any():
         axes[2].contour(moved, levels=[0.5], colors="orange", linewidths=1.0)
+    if excluded.any():
+        axes[2].contour(excluded, levels=[0.5], colors="red", linewidths=1.0)
     if spots.any():
         axes[2].contour(spots > 0, levels=[0.5], colors="magenta", linewidths=0.8)
     for d in bleached_ids:                                  # ID above each bleached droplet
@@ -185,7 +190,10 @@ def overview_figure(name, pre, post, labels, spots, tab):
         cy, cx = ndi.center_of_mass(droplet)
         radius = np.sqrt(droplet.sum() / np.pi)
         axes[2].text(cx, cy - radius - 3, str(d), color="yellow", fontsize=8, ha="center")
-    axes[2].set_title(f"{len(bleached_ids)} bleached (magenta), {int(tab['moved'].sum())} moved (orange)")
+    title = f"{len(bleached_ids)} bleached (magenta), {int(tab['moved'].sum())} moved (orange)"
+    if len(excluded_ids):
+        title += f", {len(excluded_ids)} excluded (red)"
+    axes[2].set_title(title)
     for ax in axes:
         ax.axis("off")
     fig.suptitle(name, fontsize=13)
