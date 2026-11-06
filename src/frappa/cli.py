@@ -76,7 +76,8 @@ def main():
                 "command": "frappa " + " ".join(sys.argv[1:]),
                 "input_files": [f.name for f in files],
                 "figures": {"all_plots": args.all_plots, **fig_opts},
-                "parameters": {"segmentation": seg_params},
+                "parameters": {"segmentation": seg_params,
+                               "bleach_detection": bleach_params},
                 "saturation report": {"enabled": args.saturation_report, 
                                       "threshold": args.saturation_threshold}}
     with open(args.output / "run_info.json", "w") as fh:
