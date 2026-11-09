@@ -66,8 +66,7 @@ frappa -i data/ -o results_cl005/ --clip-limit 0.005                   # a diffe
 | `--gain-frac` | 0.25 | a ring pixel counts as gained if it brightened by more than this fraction of the droplet intensity (used for motion detection) |
 | `--max-shift` | 1.0 | droplets with a larger estimated shift (pixels) count as moved and are left out (used for motion detection) |
 | `--min-peak-drop` | 0.4 | a droplet is bleached if its peak relative drop is at least this |
-| `--spot-fraction` | 0.75 | consider in the bleached spot pixels whose drop is at least this fraction of the droplet’s peak drop; lower values give larger spots (e.g. 0.5 = half maximum)
-|
+| `--spot-fraction` | 0.75 | consider in the bleached spot pixels whose drop is at least this fraction of the droplet’s peak drop; lower values give larger spots (e.g. 0.5 = half maximum)|
 
 **Saturation report**
 
